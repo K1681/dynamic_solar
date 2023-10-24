@@ -10,22 +10,26 @@
 class Solarpanel
 {
     private:
-    static const int start_angle = 30, endg_angle = 255, number_of_angles = 225;
-    static const float threshold_rate = 0.1;  // 10%(of 1024) per second. => 102.4 units/1s => 0.1units/ms.
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////
+    static const int start_duty_cycle = 30, end_duty_cycle = 255, turn_delay = 2000;
+    static const double start_angle = 0, end_angle = 180, delta_angle = 5, threshold_rate = 0.1;  // 10%(of 1024) per second. => 102.4 units/1s => 0.1units/ms.
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////
+
     uint8_t servo_pin, panel_pin;
-    int angle, brightness, calibrated;
-    unsigned long long int time;
+    int brightness, calibrated;
+    double angle;
+    unsigned long long int time, calibrate_time;
+    void set_servo(double angle, int wait = 0);
 
     public:
     Solarpanel(void);
     Solarpanel(uint8_t servo_pin, uint8_t panel_pin);
     void begin(void);
     void calibrate(void);
-    void re_calibrate(void);
+    void micro_calibrate(void);
     void operate(void);
-    float get_angle(void);
-    float get_voltage(void);
-
+    double get_angle(void);
+    double get_voltage(void);
 };
 
 #endif

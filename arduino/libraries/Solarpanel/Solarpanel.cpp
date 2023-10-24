@@ -10,20 +10,22 @@ Solarpanel::Solarpanel(void)
 {
     servo_pin = NULL;
     panel_pin = NULL;
-    angle = start_angle;
+    angle = 0;
     brightness = 0;
     calibrated = 0;
     time = 0;
+    calibrate_time = 0;
 }
 
 Solarpanel::Solarpanel(uint8_t servo_pin, uint8_t panel_pin)
 {
     this->servo_pin = servo_pin;
     this->panel_pin = panel_pin;
-    angle = start_angle;
+    angle = 0;
     brightness = 0;
     calibrated = 0;
     time = 0;
+    calibrate_time = 0;
 }
 
 void Solarpanel::begin(void)
@@ -34,55 +36,57 @@ void Solarpanel::begin(void)
 
 void Solarpanel::calibrate(void)
 {
-    analogWrite(servo_pin, start_angle);
-    int max_brightness = analogRead(panel_pin), max_angle = start_angle, curr_brightness;
+    set_servo(this->start_angle, 1);
+    int max_brightness = analogRead(this->panel_pin), curr_brightness;
+    double max_angle = this->start_angle;
 
-    for(int i = start_angle + 1; i <= endg_angle; i++)
+    for(double curr_angle = start_angle + delta_angle; curr_angle <= end_angle; curr_angle += delta_angle)
     {
-        analogWrite(servo_pin, i);
-        delay(50);
+        set_servo(curr_angle, 1);
         curr_brightness = analogRead(panel_pin);
         if(curr_brightness > max_brightness)
         {
-            max_angle = i;
+            max_angle = curr_angle;
             max_brightness = curr_brightness;
         }
     }
 
-    angle = max_angle;
-    analogWrite(servo_pin, angle);
-    brightness = analogRead(panel_pin);
-    time = millis();
-    calibrated = 1;
+    set_servo(max_angle, 1);
+    this->brightness = analogRead(panel_pin);
+    this->time = millis();
+    this->calibrate_time = millis();
+    this->calibrated = 1;
 }
 
-void Solarpanel::re_calibrate(void)
+void Solarpanel::micro_calibrate(void)
 {
-    int max_brightness = analogRead(panel_pin), max_angle = angle, curr_brightness;
+    int max_brightness = analogRead(this->panel_pin), curr_brightness;
+    double max_angle = this->angle;
 
-    for(int i = angle + 1; i <= endg_angle; i++)
+    for(double curr_angle = this->angle + delta_angle; curr_angle <= end_angle; curr_angle += delta_angle)
     {
-        analogWrite(servo_pin, i);
-        delay(50);
+        set_servo(curr_angle, 1);
         curr_brightness = analogRead(panel_pin);
         if(curr_brightness > max_brightness)
         {
             max_brightness = curr_brightness;
-            max_angle = i;
+            max_angle = curr_angle;
         }
         else if(curr_brightness < max_brightness)
         {
-            i--;
-            for(i; i >= start_angle; i--)
+            curr_angle -= 2 * delta_angle;
+            for(curr_angle; curr_angle >= start_angle; curr_angle -= delta_angle)
             {
+                set_servo(curr_angle, 1);
                 curr_brightness = analogRead(panel_pin);
                 if(curr_brightness > max_brightness)
                 {
                     max_brightness = curr_brightness;
-                    max_angle = i;
+                    max_angle = curr_angle;
                 }
                 else if(curr_brightness < max_brightness)
                 {
+                    set_servo(max_angle, 1);
                     break;
                 }
             }
@@ -90,10 +94,8 @@ void Solarpanel::re_calibrate(void)
         }
     }
 
-    angle = max_angle;
-    analogWrite(servo_pin, angle);
-    brightness = analogRead(panel_pin);
-    time = millis();
+    this->brightness = analogRead(panel_pin);
+    this->time = millis();
 }
 
 void Solarpanel::operate(void)
@@ -103,22 +105,48 @@ void Solarpanel::operate(void)
         calibrate();
         return;
     }
+
     float delta_brightness = analogRead(panel_pin) - brightness;
-    delta_brightness = (delta_brightness > 0) ? delta_brightness : -delta_brightness;
-    if((delta_brightness/ (float)(millis() - time)) >= threshold_rate)
+    float delta_time = millis() - time;
+    float delta_calibrate_time = millis() - calibrate_time;
+    delta_brightness = (delta_brightness >= 0) ? delta_brightness : -delta_brightness;
+
+    if(((delta_brightness / delta_time) >= threshold_rate) && (delta_calibrate_time > turn_delay))
     {
         calibrate();
         return;
     }
-    re_calibrate();
+
+    micro_calibrate();
 }
 
-float Solarpanel::get_angle(void)
+double Solarpanel::get_angle(void)
 {
-    return (float)((angle - start_angle) * 180) / (float)number_of_angles;
+    return angle;
 }
 
-float Solarpanel::get_voltage(void)
+double Solarpanel::get_voltage(void)
 {
-    return (float)(brightness * 5) / (float)1024;
+    return (double)(brightness * 5) / (double)1024;
+}
+
+void Solarpanel::set_servo(double target_angle, int wait = 0)
+{
+    if(target_angle < start_angle)
+    {
+        target_angle = start_angle;
+    }
+    else if(target_angle > end_angle)
+    {
+        target_angle = end_angle;
+    }
+
+    analogWrite(servo_pin, start_duty_cycle + (int)(((target_angle - start_angle)*(double)(end_duty_cycle - start_duty_cycle))/(end_angle - start_angle)));
+    if(wait)
+    {
+        double delta_angel = target_angle - angle;
+        delta_angel = (delta_angel >= 0) ? delta_angel : -delta_angel;
+        delay((int)((delta_angle*(double)turn_delay)/(end_angle - start_angle)));
+    }
+    angle = target_angle;
 }
