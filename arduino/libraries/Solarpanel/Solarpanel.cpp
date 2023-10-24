@@ -106,18 +106,19 @@ void Solarpanel::operate(void)
         return;
     }
 
-    float delta_brightness = analogRead(panel_pin) - brightness;
-    float delta_time = millis() - time;
-    float delta_calibrate_time = millis() - calibrate_time;
+    double delta_brightness = analogRead(panel_pin) - brightness;
+    double delta_time = millis() - this->time;
     delta_brightness = (delta_brightness >= 0) ? delta_brightness : -delta_brightness;
-
-    if(((delta_brightness / delta_time) >= threshold_rate) && (delta_calibrate_time > turn_delay))
+    if((delta_brightness / delta_time) >= threshold_rate)
     {
         calibrate();
         return;
     }
 
-    micro_calibrate();
+    if(delta_time > micro_calibrate_delay)
+    {
+        micro_calibrate();
+    }
 }
 
 double Solarpanel::get_angle(void)
